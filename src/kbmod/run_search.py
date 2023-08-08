@@ -43,7 +43,7 @@ class run_search:
         Search parameters.
     """
 
-    def __init__(self, input_parameters, config_file=None):
+    def __init__(self, input_parameters, image_list, Parser, config_file=None):
         self.config = KBMODConfig()
 
         # Load parameters from a file.
@@ -56,6 +56,9 @@ class run_search:
 
         # Validate the configuration.
         self.config.validate()
+
+        self.image_list = image_list
+        self.Parser = Parser
 
     def do_masking(self, stack):
         """Perform the masking based on the search's configuration parameters.
@@ -239,18 +242,8 @@ class run_search:
         start = time.time()
         kb_interface = Interface()
 
-        # Load the PSF.
-        default_psf = kb.psf(self.config["psf_val"])
-
-        # Load images to search
-        stack, img_info = kb_interface.load_images(
-            self.config["im_filepath"],
-            self.config["time_file"],
-            self.config["psf_file"],
-            self.config["mjd_lims"],
-            default_psf,
-            verbose=self.config["debug"],
-        )
+        # Load the images into KBMOD.
+        stack, img_info = self.Parser.load_images(self.image_list)
 
         # Compute the ecliptic angle for the images.
         center_pixel = (img_info.stats[0].width / 2, img_info.stats[0].height / 2)

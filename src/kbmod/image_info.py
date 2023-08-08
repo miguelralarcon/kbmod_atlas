@@ -90,6 +90,26 @@ class ImageInfo:
             # Compute the center of the image in sky coordinates.
             self.center = self.wcs.pixel_to_world(self.width / 2, self.height / 2)
 
+    def populate_from_header(self, header):
+            """Read the file stats information from a FITS header.
+
+            Parameters
+            ----------
+            header : `fits.Header`
+                The header to read from.
+            """
+            self.wcs = WCS(header)
+            self.width = header["NAXIS1"]
+            self.height = header["NAXIS2"]
+            self.visit_id = header["IDNUM"]
+            self.set_epoch(Time(header["DATE-AVG"], format="isot"))
+            self.obs_code = header["OBSERVAT"]
+            self.obs_loc_set = True
+            self.obs_lat = float(header["OBS-LAT"])
+            self.obs_long = float(header["OBS-LONG"])
+            self.obs_alt = float(header["OBS-ELEV"])
+            self.center = self.wcs.pixel_to_world(self.width / 2, self.height / 2)
+            
     def set_layered_image(self, image):
         """Manually set the layered image.
 
