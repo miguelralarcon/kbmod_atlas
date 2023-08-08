@@ -31,7 +31,7 @@ If CUDA Toolkit is not available on your system follow their [official installat
 
 Clone this repository, including all of its submodules:
 ```
-git clone --recursive https://github.com/dirac-institute/kbmod.git
+git clone --recursive https://github.com/miguelralarcon/kbmod_atlas
 ```
 
 Build
