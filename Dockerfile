@@ -21,6 +21,9 @@ RUN python3.8 -m pip install cupy-cuda12x
 # Install JupyterLab
 RUN pip3 install jupyterlab
 
+# Give execution permissions to warpsky
+RUN chmod +x parsers/warpsky
+
 # Set the entry point command to launch JupyterLab
 CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root"]
 
