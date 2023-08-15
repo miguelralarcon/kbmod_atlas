@@ -16,6 +16,7 @@ ADD . .
 # Build the project
 RUN python3.8 -m pip install .
 RUN python3.8 -m pip install .[analysis]
+RUN python3.8 -m pip install cupy-cuda120
 
 # Install JupyterLab
 RUN pip3 install jupyterlab
