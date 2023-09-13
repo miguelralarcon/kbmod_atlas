@@ -243,26 +243,26 @@ class run_search:
         kb_interface = Interface()
 
         # Load the images into KBMOD.
-        stack, img_info = self.Parser.load_images(self.image_list)
+        self.stack, self.img_info = self.Parser.load_images(self.image_list)
 
         # Compute the ecliptic angle for the images.
-        center_pixel = (img_info.stats[0].width / 2, img_info.stats[0].height / 2)
-        suggested_angle = self._calc_suggested_angle(img_info.stats[0].wcs, center_pixel)
+        center_pixel = (self.img_info.stats[0].width / 2, self.img_info.stats[0].height / 2)
+        suggested_angle = self._calc_suggested_angle(self.img_info.stats[0].wcs, center_pixel)
 
         # Set up the post processing data structure.
-        kb_post_process = PostProcess(self.config, img_info.get_all_mjd())
+        kb_post_process = PostProcess(self.config, self.img_info.get_all_mjd())
 
         # Apply the mask to the images.
         if self.config["do_mask"]:
-            stack = self.do_masking(stack)
+            self.stack = self.do_masking(self.stack)
 
         # Perform the actual search.
-        search = kb.stack_search(stack)
-        search, search_params = self.do_gpu_search(search, img_info, suggested_angle, kb_post_process)
+        search = kb.stack_search(self.stack)
+        search, search_params = self.do_gpu_search(search, self.img_info, suggested_angle, kb_post_process)
 
         # Load the KBMOD results into Python and apply a filter based on
         # 'filter_type.
-        mjds = np.array(img_info.get_all_mjd())
+        mjds = np.array(self.img_info.get_all_mjd())
         keep = kb_post_process.load_and_filter_results(
             search,
             self.config["lh_level"],
@@ -282,8 +282,8 @@ class run_search:
 
         if self.config["do_clustering"]:
             cluster_params = {}
-            cluster_params["x_size"] = img_info.get_x_size()
-            cluster_params["y_size"] = img_info.get_y_size()
+            cluster_params["x_size"] = self.img_info.get_x_size()
+            cluster_params["y_size"] = self.img_info.get_y_size()
             cluster_params["vel_lims"] = search_params["vel_lims"]
             cluster_params["ang_lims"] = search_params["ang_lims"]
             cluster_params["mjd"] = mjds
@@ -312,6 +312,123 @@ class run_search:
         print("Time taken for patch: ", end - start)
 
         return keep
+    
+
+    def run_search_with_param(self, input_parameters):
+        """This function serves as the highest-level python interface for starting
+        a KBMOD search.
+
+        The `config` attribute requires the following key value pairs.
+
+        Parameters
+        ----------
+        self.config.im_filepath : string
+            Path to the folder containing the images to be ingested into
+            KBMOD and searched over.
+        self.config.res_filepath : string
+            Path to the folder that will contain the results from the search.
+            If ``None`` the program skips outputting the files.
+        self.config.out_suffix : string
+            Suffix to append to the output files. Used to differentiate
+            between different searches over the same stack of images.
+        self.config.time_file : string
+            Path to the file containing the image times (or None to use
+            values from the FITS files).
+        self.config.psf_file : string
+            Path to the file containing the image PSFs (or None to use default).
+        self.config.lh_level : float
+            Minimum acceptable likelihood level for a trajectory.
+            Trajectories with likelihoods below this value will be discarded.
+        self.config.psf_val : float
+            The value of the variance of the default PSF to use.
+        self.config.mjd_lims : numpy array
+            Limits the search to images taken within the limits input by
+            mjd_lims (or None for no filtering).
+        self.config.average_angle : float
+            Overrides the ecliptic angle calculation and instead centers
+            the average search around average_angle.
+
+        Returns
+        -------
+        keep : ResultList
+            The results.
+        """
+        start = time.time()
+        kb_interface = Interface()
+
+        # Load any additional parameters (overwriting what is there).
+        if len(input_parameters) > 0:
+            self.config.set_from_dict(input_parameters)
+        self.config.validate()
+
+        # Compute the ecliptic angle for the images.
+        center_pixel = (self.img_info.stats[0].width / 2, self.img_info.stats[0].height / 2)
+        suggested_angle = self._calc_suggested_angle(self.img_info.stats[0].wcs, center_pixel)
+
+        # Set up the post processing data structure.
+        kb_post_process = PostProcess(self.config, self.img_info.get_all_mjd())
+
+        # Apply the mask to the images.
+        if self.config["do_mask"]:
+            self.stack = self.do_masking(self.stack)
+
+        # Perform the actual search.
+        search = kb.stack_search(self.stack)
+        search, search_params = self.do_gpu_search(search, self.img_info, suggested_angle, kb_post_process)
+
+        # Load the KBMOD results into Python and apply a filter based on
+        # 'filter_type.
+        mjds = np.array(self.img_info.get_all_mjd())
+        keep = kb_post_process.load_and_filter_results(
+            search,
+            self.config["lh_level"],
+            chunk_size=self.config["chunk_size"],
+            max_lh=self.config["max_lh"],
+        )
+        if self.config["do_stamp_filter"]:
+            kb_post_process.apply_stamp_filter(
+                keep,
+                search,
+                center_thresh=self.config["center_thresh"],
+                peak_offset=self.config["peak_offset"],
+                mom_lims=self.config["mom_lims"],
+                stamp_type=self.config["stamp_type"],
+                stamp_radius=self.config["stamp_radius"],
+            )
+
+        if self.config["do_clustering"]:
+            cluster_params = {}
+            cluster_params["x_size"] = self.img_info.get_x_size()
+            cluster_params["y_size"] = self.img_info.get_y_size()
+            cluster_params["vel_lims"] = search_params["vel_lims"]
+            cluster_params["ang_lims"] = search_params["ang_lims"]
+            cluster_params["mjd"] = mjds
+            kb_post_process.apply_clustering(keep, cluster_params)
+
+        # Extract all the stamps.
+        kb_post_process.get_all_stamps(keep, search, self.config["stamp_radius"])
+
+        # Count how many known objects we found.
+        if self.config["known_obj_thresh"]:
+            self._count_known_matches(keep, search)
+
+        del search
+
+        # Save the results and the configuration information used.
+        print(f"Found {keep.num_results()} potential trajectories.")
+        if self.config["res_filepath"] is not None:
+            keep.save_to_files(self.config["res_filepath"], self.config["output_suffix"])
+
+            config_filename = os.path.join(
+                self.config["res_filepath"], f"config_{self.config['output_suffix']}.yml"
+            )
+            self.config.save_configuration(config_filename, overwrite=True)
+
+        end = time.time()
+        print("Time taken for patch: ", end - start)
+
+        return keep
+    
 
     def _count_known_matches(self, result_list, search):
         """Look up the known objects that overlap the images and count how many
