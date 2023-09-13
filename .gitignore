@@ -29,3 +29,4 @@ docs/source/examples/_notebooks
 # emacs work in progress files (lock and autosave)
 .#*
 \#*#
+lab/pointing_files
